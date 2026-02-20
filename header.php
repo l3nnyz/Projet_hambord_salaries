@@ -26,9 +26,6 @@ expanded="false" aria-label="Toggle navigation">
 <div class="collapse navbar-collapse" id="navbarSupportedContent">
 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             <li class="nav-item">
-              <a class="nav-link active" aria-current="page" href="listeSalaries.php">Salariés</a>
-            </li>
-            <li class="nav-item">
               <a class="nav-link" href="historique.php"><i class="bi bi-clock-history"></i> Historique</a>
             </li>
             <?php if (isset($_SESSION['droit']) && $_SESSION['droit'] == '2'): ?>

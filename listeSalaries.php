@@ -179,3 +179,181 @@
 </div>
 
 <?php include 'footer.html'; ?>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/fr.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const salariesTable = document.getElementById('salariesTable');
+    const salariesBody = document.getElementById('salariesBody');
+    const tableHeader = document.getElementById('tableHeader');
+    const searchFields = document.querySelectorAll('.search-field');
+    const userDroit = salariesBody.dataset.userDroit;
+
+    function filterTable() {
+      const searchTerm = searchInput.value.toLowerCase();
+      const enabledFields = Array.from(searchFields).filter(field => field.checked).map(field => field.value);
+
+      Array.from(salariesBody.rows).forEach(row => {
+        let rowVisible = false;
+        Array.from(row.cells).forEach(cell => {
+          const field = cell.dataset.field;
+          if (enabledFields.includes(field) && cell.textContent.toLowerCase().includes(searchTerm)) {
+            rowVisible = true;
+          }
+        });
+        row.style.display = rowVisible ? '' : 'none';
+      });
+    }
+
+    searchInput.addEventListener('input', filterTable);
+    searchFields.forEach(checkbox => checkbox.addEventListener('change', filterTable));
+
+    tableHeader.querySelectorAll('.sortable').forEach(header => {
+      header.addEventListener('click', function() {
+        const sort = this.dataset.sort;
+        const order = this.dataset.order;
+        window.location.href = `listeSalaries.php?sort=${sort}&order=${order}`;
+      });
+    });
+
+    function validateInput(inputElement, field, feedbackDiv) {
+      const value = inputElement.value.trim();
+      let isValid = true;
+      let errorMessage = '';
+
+      if (value === '') {
+        isValid = false;
+        errorMessage = 'Ce champ ne peut pas être vide.';
+      } else if (field === 'salaire') {
+        if (isNaN(value) || !Number.isFinite(parseFloat(value))) {
+          isValid = false;
+          errorMessage = 'Veuillez entrer un nombre valide pour le salaire.';
+        } else if (parseFloat(value) < 0) {
+          isValid = false;
+          errorMessage = 'Le salaire ne peut pas être négatif.';
+        }
+      }
+
+      if (isValid) {
+        inputElement.classList.remove('is-invalid');
+        inputElement.classList.add('is-valid');
+        feedbackDiv.textContent = '';
+      } else {
+        inputElement.classList.remove('is-valid');
+        inputElement.classList.add('is-invalid');
+        feedbackDiv.textContent = errorMessage;
+      }
+      return isValid;
+    }
+
+    // Live editing functionality
+    salariesBody.addEventListener('dblclick', function(e) {
+      const target = e.target;
+      if (target.classList.contains('editable') && userDroit === '2') {
+        const originalValue = target.textContent.trim();
+        const id = target.dataset.id;
+        const field = target.dataset.field;
+        const type = target.dataset.type;
+
+        // Prevent multiple edits on the same cell
+        if (target.querySelector('input')) {
+          return;
+        }
+
+        // Create input element
+        const input = document.createElement('input');
+        input.value = originalValue;
+        input.classList.add('form-control');
+        input.setAttribute('required', ''); // Mark as required for browser validation
+
+        // Create feedback div
+        const feedbackDiv = document.createElement('div');
+        feedbackDiv.classList.add('invalid-feedback');
+
+        // Replace cell content with input and feedback
+        target.innerHTML = '';
+        target.appendChild(input);
+        target.appendChild(feedbackDiv); // Append feedback div
+
+        input.focus();
+
+        // Initialize Flatpickr for date fields
+        if (field === 'date_naissance' || field === 'date_embauche') {
+          flatpickr(input, {
+            dateFormat: "Y-m-d",
+            locale: "fr",
+            defaultDate: originalValue,
+            onClose: function(selectedDates, dateStr, instance) {
+              // Trigger validation when date picker closes
+              validateInput(input, field, feedbackDiv);
+            }
+          });
+        }
+
+        // Add real-time validation for non-date fields
+        if (field !== 'date_naissance' && field !== 'date_embauche') {
+          input.addEventListener('input', function() {
+            validateInput(input, field, feedbackDiv);
+          });
+        }
+
+        // Save changes on blur or enter
+        input.addEventListener('blur', function() {
+          saveChanges(input, target, id, field, originalValue, feedbackDiv);
+        });
+
+        input.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            input.blur();
+          }
+        });
+      }
+    });
+
+    function saveChanges(inputElement, cellElement, id, field, originalValue, feedbackDiv) {
+      const newValue = inputElement.value.trim();
+
+      // If value hasn't changed, just revert to original display
+      if (newValue === originalValue) {
+        cellElement.textContent = originalValue;
+        return;
+      }
+
+      // Perform validation before saving
+      if (!validateInput(inputElement, field, feedbackDiv)) {
+        // If validation fails, keep the input in editing mode and show error
+        inputElement.focus(); // Keep focus on the invalid input
+        return;
+      }
+
+      // Send to server
+      fetch('updateSalaryField.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `id=${id}&field=${field}&value=${newValue}`
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          cellElement.textContent = newValue; // Update cell with new value
+          const toast = new bootstrap.Toast(document.getElementById('updateSuccessToast'));
+          toast.show();
+        } else {
+          // If server returns an error, display it
+          alert('Erreur lors de la mise à jour: ' + data.message);
+          cellElement.textContent = originalValue; // Revert on server error
+        }
+      })
+      .catch(error => {
+        console.error('Erreur:', error);
+        alert('Erreur de connexion au serveur.');
+        cellElement.textContent = originalValue; // Revert on network error
+      });
+    }
+  });
+</script>
+</body>
+</html>
